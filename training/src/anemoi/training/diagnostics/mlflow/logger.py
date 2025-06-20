@@ -29,7 +29,7 @@ from pytorch_lightning.loggers.mlflow import _convert_params
 from pytorch_lightning.loggers.mlflow import _flatten_dict
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
-from anemoi.utils.mlflow.auth import TokenAuth
+from anemoi.utils.mlflow.auth import TokenAuth, PassiveAuth
 from anemoi.utils.mlflow.utils import clean_config_params
 from anemoi.utils.mlflow.utils import expand_iterables
 from anemoi.utils.mlflow.utils import health_check
@@ -242,7 +242,18 @@ class LogsMonitor:
                 logfile.write(cleaned_line.decode())
 
             logfile.flush()
-        self.experiment.log_artifact(self.run_id, str(self.file_save_path))
+
+        # NOTE TO SELF:
+        # this is hopefully the last one
+        # we can't just throw in a "now" to the txt file, because this relies on opening and rewriting it.
+        # So, skip it for now
+        #import datetime
+        #now = str(datetime.datetime.now()).replace(' ','T')
+        #path = str(self.file_save_path).replace(".txt", f"{now}.txt")
+        try:
+            self.experiment.log_artifact(self.run_id, str(self.file_save_path))
+        except:
+            LOGGER.warning(f"could not log_artifact {str(self.file_save_path)}")
 
 
 class AnemoiMLflowLogger(MLFlowLogger):
@@ -394,6 +405,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
         command = os.environ.get("ANEMOI_TRAINING_CMD", sys.argv[0])
         tags["command"] = command.split("/")[-1]  # get the python script name
         tags["mlflow.source.name"] = command
+
         if len(sys.argv) > 1:
             # add the arguments to the command tag
             tags["command"] = tags["command"] + " " + " ".join(sys.argv[1:])
@@ -598,10 +610,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             import mlflow
             from mlflow.entities import Param
 
-            truncation_length = 250
-
-            if Version(mlflow.VERSION) >= Version("1.28.0"):
-                truncation_length = 500
+            truncation_length = 200
 
             AnemoiMLflowLogger.log_hyperparams_as_mlflow_artifact(client=client, run_id=run_id, params=params)
 
@@ -628,9 +637,16 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 LOGGER.warning("Logging a large number of parameters to %s", len(expanded_params))
 
             # Truncate parameter values.
-            params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in expanded_params.items()]
-            for idx in range(0, len(params_list), 100):
-                client.log_batch(run_id=run_id, params=params_list[idx : idx + 100])
+            params_list = []
+            for k, v in expanded_params.items():
+                k_trunc, v_trunc = truncate_mlflow_param(k, v, max_bytes=100)
+                if k_trunc is not None:
+                    params_list.append(Param(key=k_trunc, value=v_trunc))
+
+            #for idx in range(0, len(params_list), 2):
+            #    client.log_batch(run_id=run_id, params=params_list[idx:idx+2])
+
+
 
     @staticmethod
     def log_hyperparams_as_mlflow_artifact(
@@ -642,13 +658,175 @@ class AnemoiMLflowLogger(MLFlowLogger):
         import json
         import tempfile
         from json import JSONEncoder
+        import datetime
 
         class StrEncoder(JSONEncoder):
             def default(self, o: Any) -> str:
                 return str(o)
 
+        now = str(datetime.datetime.now()).replace(' ','T')
         with tempfile.TemporaryDirectory() as tmp_dir:
-            path = Path(tmp_dir) / "config.json"
+            path = Path(tmp_dir) / f"config.{now}.json"
             with Path.open(path, "w") as f:
                 json.dump(params, f, cls=StrEncoder)
             client.log_artifact(run_id=run_id, local_path=path)
+
+
+class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
+    """A custom MLflow logger that logs terminal output."""
+
+    def __init__(
+        self,
+        aml_resource_group: str,
+        aml_workspace_name: str,
+        experiment_name: str = "lightning_logs",
+        project_name: str = "anemoi",
+        run_name: str | None = None,
+        tracking_uri: str | None = os.getenv("MLFLOW_TRACKING_URI"),
+        save_dir: str | None = "./mlruns",
+        log_model: Literal["all"] | bool = False,
+        prefix: str = "",
+        resumed: bool | None = False,
+        forked: bool | None = False,
+        run_id: str | None = None,
+        fork_run_id: str | None = None,
+        offline: bool | None = False,
+        authentication: bool | None = None,
+        log_hyperparams: bool | None = True,
+        on_resume_create_child: bool | None = True,
+    ) -> None:
+        """Initialize the AnemoiMLflowLogger.
+
+        Parameters
+        ----------
+        aml_resource_group: str
+            Name of the Azure ML resource group
+        aml_workspace: str
+            Name of the Azure ML workspace
+        experiment_name : str, optional
+            Name of experiment, by default "lightning_logs"
+        project_name : str, optional
+            Name of the project, by default "anemoi"
+        run_name : str | None, optional
+            Name of run, by default None
+        tracking_uri : str | None, optional
+            Tracking URI of server, by default os.getenv("MLFLOW_TRACKING_URI")
+        save_dir : str | None, optional
+            Directory to save logs to, by default "./mlruns"
+        log_model : Literal[True, False, "all"], optional
+            Log model checkpoints to server (expensive), by default False
+        prefix : str, optional
+            Prefix for experiments, by default ""
+        resumed : bool | None, optional
+            Whether the run was resumed or not, by default False
+        forked : bool | None, optional
+            Whether the run was forked or not, by default False
+        run_id : str | None, optional
+            Run id of current run, by default None
+        fork_run_id : str | None, optional
+            Fork Run id from parent run, by default None
+        offline : bool | None, optional
+            Whether to run offline or not, by default False
+        authentication : bool | None, optional
+            Whether to authenticate with server or not, by default None
+        log_hyperparams : bool | None, optional
+            Whether to log hyperparameters, by default True
+        on_resume_create_child: bool | None, optional
+            Whether to create a child run when resuming a run, by default False
+        """
+        import mlflow
+        from azureml.core.authentication import ServicePrincipalAuthentication
+        from azureml.core import Workspace
+
+        self._resumed = resumed
+        self._forked = forked
+        self._flag_log_hparams = log_hyperparams
+
+        self._fork_run_server2server = None
+        self._parent_run_server2server = None
+        self._parent_dry_run = False
+
+        enabled = authentication and not offline
+
+        # Azure specific stuff
+        # we don't need authenticate, this just lets us easily subclass the logger
+        self.auth = PassiveAuth()
+
+        # Check if the user has set the following required environment variables
+        azure_env_vars = ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID"]
+        missing = [v for v in azure_env_vars if v not in os.environ]
+        if len(missing) > 0:
+            raise OSError(f"AnemoiAzureMLflowLogger: Could not find the following required Environment Variables: {missing}")
+
+        # OK now we're good to go
+        #credential = ClientSecretCredential(
+        sp_auth = ServicePrincipalAuthentication(
+            tenant_id=os.environ["AZURE_TENANT_ID"],
+            service_principal_id=os.environ["AZURE_CLIENT_ID"],
+            service_principal_password=os.environ["AZURE_CLIENT_SECRET"],
+        )
+        ws = Workspace(
+            subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+            resource_group=aml_resource_group,
+            workspace_name=aml_workspace_name,
+            auth=sp_auth,
+        )
+
+        tracking_uri = ws.get_mlflow_tracking_uri()
+        mlflow.set_tracking_uri(tracking_uri)
+
+        # Back to our regularly scheduled programming
+        if rank_zero_only.rank == 0:
+            if offline:
+                LOGGER.info("MLflow is logging offline.")
+            else:
+                LOGGER.info("MLflow token authentication %s for %s", "enabled" if enabled else "disabled", tracking_uri)
+                self.auth.authenticate()
+
+        run_id, run_name, tags = self._get_mlflow_run_params(
+            project_name=project_name,
+            run_name=run_name,
+            config_run_id=run_id,
+            fork_run_id=fork_run_id,
+            tracking_uri=tracking_uri,
+            on_resume_create_child=on_resume_create_child,
+        )
+        # Before creating the run we need to overwrite the tracking_uri and save_dir if offline
+        if offline:
+            # OFFLINE - When we run offline we can pass a save_dir pointing to a local path
+            tracking_uri = None
+
+        else:
+            # ONLINE - When we pass a tracking_uri to mlflow then it will ignore the
+            # saving dir and save all artifacts/metrics to the remote server database
+            save_dir = None
+
+        MLFlowLogger.__init__(
+            self,
+            experiment_name=experiment_name,
+            run_name=run_name,
+            tracking_uri=tracking_uri,
+            tags=tags,
+            save_dir=save_dir,
+            log_model=log_model,
+            prefix=prefix,
+            run_id=run_id,
+        )
+
+def truncate_mlflow_param(key, value, max_bytes=200):
+    key_bytes = str(key).encode('utf-8')
+    value_str = str(value)
+    available = max_bytes - len(key_bytes)
+    if available <= 0:
+        # Key alone too long, skip this param
+        return None, None
+    # Now truncate the value so that the combined byte length is <= max_bytes
+    value_bytes = value_str.encode('utf-8')
+    if len(value_bytes) <= available:
+        return key, value_str
+    # Truncate value by bytes, not chars
+    # Find the byte slice that fits
+    truncated = value_bytes[:available]
+    # Might split a unicode character, so decode 'ignore'
+    value_trunc_str = truncated.decode('utf-8', errors='ignore')
+    return key, value_trunc_str

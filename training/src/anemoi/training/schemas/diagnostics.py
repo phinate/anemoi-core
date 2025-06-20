@@ -276,6 +276,12 @@ class MlflowSchema(BaseModel):
     "Keys to expand within params. Any key being expanded will have lists converted according to `expand_iterables`."
     http_max_retries: PositiveInt = Field(example=35)
     "Specifies the maximum number of retries for MLflow HTTP requests, default 35."
+    use_azure: Optional[bool] = False
+    "If true, log to azure ml workspace server"
+    aml_resource_group: Optional[str] = None
+    "If using AML to log with mlflow, name of the resource group"
+    aml_workspace_name: Optional[str] = None
+    "If using AML to log with mlflow, name of the workspace"
 
 
 class TensorboardSchema(BaseModel):

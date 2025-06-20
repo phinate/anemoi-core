@@ -40,7 +40,7 @@ def get_mlflow_logger(config: BaseSchema) -> None:
     os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR"] = "2"
     os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_JITTER"] = "1"
 
-    from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
+    from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger, AnemoiAzureMLflowLogger
 
     resumed = config.training.run_id is not None
     forked = config.training.fork_run_id is not None
@@ -72,7 +72,14 @@ def get_mlflow_logger(config: BaseSchema) -> None:
         )
         log_hyperparams = False
 
-    logger = AnemoiMLflowLogger(
+    kw = {}
+    if not config.diagnostics.log.mlflow.use_azure:
+        Logger = AnemoiMLflowLogger
+    else:
+        Logger = AnemoiAzureMLflowLogger
+        kw["aml_resource_group"] = config.diagnostics.log.mlflow.aml_resource_group
+        kw["aml_workspace_name"] = config.diagnostics.log.mlflow.aml_workspace_name
+    logger = Logger(
         experiment_name=config.diagnostics.log.mlflow.experiment_name,
         project_name=config.diagnostics.log.mlflow.project_name,
         tracking_uri=tracking_uri,
@@ -87,6 +94,7 @@ def get_mlflow_logger(config: BaseSchema) -> None:
         log_hyperparams=log_hyperparams,
         authentication=config.diagnostics.log.mlflow.authentication,
         on_resume_create_child=config.diagnostics.log.mlflow.on_resume_create_child,
+        **kw,
     )
     config_params = OmegaConf.to_container(convert_to_omegaconf(config), resolve=True)
 
