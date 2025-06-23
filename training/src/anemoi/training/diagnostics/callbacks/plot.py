@@ -122,7 +122,13 @@ class BasePlotCallback(Callback, ABC):
                 logger.experiment.log({exp_log_tag: wandb.Image(fig)})
             if self.config.diagnostics.log.mlflow.enabled:
                 run_id = logger.run_id
-                logger.experiment.log_artifact(run_id, str(save_path))
+                try:
+                    logger.experiment.log_artifact(run_id, str(save_path))
+                except Exception as e:
+                    if "Resource Conflict" in str(e):
+                        LOGGER.warning(f"Artifact: {str(save_path)} already exists, will not log again.")
+                    else:
+                        LOGGER.error(str(e))
 
         plt.close(fig)  # cleanup
 
@@ -151,7 +157,13 @@ class BasePlotCallback(Callback, ABC):
 
             if self.config.diagnostics.log.mlflow.enabled:
                 run_id = logger.run_id
-                logger.experiment.log_artifact(run_id, str(save_path))
+                try:
+                    logger.experiment.log_artifact(run_id, str(save_path))
+                except Exception as e:
+                    if "Resource Conflict" in str(e):
+                        LOGGER.warning(f"Artifact: {str(save_path)} already exists, will not log again.")
+                    else:
+                        LOGGER.error(str(e))
 
         plt.close(fig)  # cleanup
 
