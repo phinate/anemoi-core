@@ -736,7 +736,7 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         """
         import mlflow
         from azureml.core.authentication import ServicePrincipalAuthentication
-        from azureml.core import Workspace
+        from azureml.core import Workspace, Run as AzureMLRun
 
         self._resumed = resumed
         self._forked = forked
@@ -779,9 +779,6 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         if rank_zero_only.rank == 0:
             if offline:
                 LOGGER.info("MLflow is logging offline.")
-            else:
-                LOGGER.info("MLflow token authentication %s for %s", "enabled" if enabled else "disabled", tracking_uri)
-                self.auth.authenticate()
 
         run_id, run_name, tags = self._get_mlflow_run_params(
             project_name=project_name,
@@ -812,6 +809,13 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             prefix=prefix,
             run_id=run_id,
         )
+
+        # now set Azure display name to be equal to the run name anemoi sees
+        # this apparently should happen after the logger is initialized
+        aml_run = AzureMLRun.get(ws, run_id=self.run_id)
+        aml_run.display_name = self.run_id
+        aml_run.flush()
+
 
 def truncate_mlflow_param(key, value, max_bytes=200):
     key_bytes = str(key).encode('utf-8')
