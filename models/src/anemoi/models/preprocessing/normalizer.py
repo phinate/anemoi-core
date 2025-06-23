@@ -50,17 +50,20 @@ class InputNormalizer(BasePreprocessor):
         mean = statistics["mean"]
         stdev = statistics["stdev"]
 
+        residual_stdev = statistics.get("residual_stdev", np.ones_like(stdev))
+        gmean_residual_stdev = statistics.get("gmean_residual_stdev", np.ones_like(stdev))
+
         # Optionally reuse statistic of one variable for another variable
         statistics_remap = {}
         for remap, source in self.remap.items():
             idx_src, idx_remap = name_to_index_training_input[source], name_to_index_training_input[remap]
-            statistics_remap[idx_remap] = (minimum[idx_src], maximum[idx_src], mean[idx_src], stdev[idx_src])
+            statistics_remap[idx_remap] = (minimum[idx_src], maximum[idx_src], mean[idx_src], stdev[idx_src], residual_stdev[idx_source], gmean_residual_stdev[idx_source])
 
         # Two-step to avoid overwriting the original statistics in the loop (this reduces dependence on order)
         for idx, new_stats in statistics_remap.items():
-            minimum[idx], maximum[idx], mean[idx], stdev[idx] = new_stats
+            minimum[idx], maximum[idx], mean[idx], stdev[idx], residual_stdev[idx], gmean_residual_stdev[idx] = new_stats
 
-        self._validate_normalization_inputs(name_to_index_training_input, minimum, maximum, mean, stdev)
+        self._validate_normalization_inputs(name_to_index_training_input, minimum, maximum, mean, stdev, residual_stdev, gmean_residual_stdev)
 
         _norm_add = np.zeros((minimum.size,), dtype=np.float32)
         _norm_mul = np.ones((minimum.size,), dtype=np.float32)
@@ -94,6 +97,38 @@ class InputNormalizer(BasePreprocessor):
                 LOGGER.debug(f"Normalizing: {name} is max-normalised to [0, 1].")
                 _norm_mul[i] = 1 / maximum[i]
 
+            elif method == "mean-rstd":
+                LOGGER.debug(f"Normalizing: {name} is mean-rstd-normalized.")
+                if residual_stdev[i] == 0:
+                    warnings.warn(f" ... the field {name} has 0 valued residual standard deviation")
+
+                _norm_mul[i] = 1 / (stdev[i] * residual_stdev[i])
+                _norm_add[i] = -mean[i] / (stdev[i] * residual_stdev[i])
+
+            elif method == "rstd":
+                LOGGER.debug(f"Normalizing: {name} is rstd-normalized.")
+                if gmean_residual_stdev[i] == 0:
+                    warnings.warn(f" ... the field {name} has 0 valued residual standard deviation")
+
+                _norm_mul[i] = 1 / (stdev[i] * residual_stdev[i])
+                _norm_add[i] = 0.
+
+            elif method == "mean-gmrstd":
+                LOGGER.debug(f"Normalizing: {name} is mean-gmrstd-normalized.")
+                if gmean_residual_stdev[i] == 0:
+                    warnings.warn(f" ... the field {name} has 0 valued residual standard deviation")
+
+                _norm_mul[i] = 1 / (stdev[i] * gmean_residual_stdev[i])
+                _norm_add[i] = -mean[i] / (stdev[i] * gmean_residual_stdev[i])
+
+            elif method == "gmrstd":
+                LOGGER.debug(f"Normalizing: {name} is gmrstd-normalized.")
+                if gmean_residual_stdev[i] == 0:
+                    warnings.warn(f" ... the field {name} has 0 valued residual standard deviation")
+
+                _norm_mul[i] = 1 / (stdev[i] * gmean_residual_stdev[i])
+                _norm_add[i] = 0.
+
             elif method == "none":
                 LOGGER.info(f"Normalizing: {name} is not normalized.")
 
@@ -106,7 +141,7 @@ class InputNormalizer(BasePreprocessor):
         self.register_buffer("_input_idx", data_indices.data.input.full, persistent=True)
         self.register_buffer("_output_idx", self.data_indices.data.output.full, persistent=True)
 
-    def _validate_normalization_inputs(self, name_to_index_training_input: dict, minimum, maximum, mean, stdev):
+    def _validate_normalization_inputs(self, name_to_index_training_input: dict, minimum, maximum, mean, stdev, residual_stdev, gmean_residual_stdev):
         assert len(self.methods) == sum(len(v) for v in self.method_config.values()), (
             f"Error parsing methods in InputNormalizer methods ({len(self.methods)}) "
             f"and entries in config ({sum(len(v) for v in self.method_config)}) do not match."
@@ -117,6 +152,8 @@ class InputNormalizer(BasePreprocessor):
         assert maximum.size == n, (maximum.size, n)
         assert mean.size == n, (mean.size, n)
         assert stdev.size == n, (stdev.size, n)
+        assert residual_stdev.size == n, (residual_stdev.size, n)
+        assert gmean_residual_stdev.size == n, (gmean_residual_stdev.size, n)
 
         # Check for typos in method config
         assert isinstance(self.methods, dict)
@@ -128,6 +165,10 @@ class InputNormalizer(BasePreprocessor):
                 # "robust",
                 "min-max",
                 "max",
+                "mean-rstd",
+                "rstd",
+                "mean-gmrstd",
+                "gmrstd",
                 "none",
             ], f"{method} is not a valid normalisation method"
 

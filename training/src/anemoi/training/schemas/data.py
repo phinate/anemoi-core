@@ -22,7 +22,7 @@ from anemoi.utils.schemas import BaseModel
 
 
 class NormalizerSchema(BaseModel):
-    default: Union[str, None] = Field(literals=["mean-std", "std", "min-max", "max", "none"])
+    default: Union[str, None] = Field(literals=["mean-std", "std", "min-max", "max", "mean-rstd", "rstd", "mean-gmrstd", "gmrstd", "none"])
     """Normalizer default method to apply"""
     remap: Union[dict[str, str], None] = Field(default_factory=dict)
     """Dictionary for remapping variables"""
@@ -34,6 +34,14 @@ class NormalizerSchema(BaseModel):
     """Variables to normalize with min-max."""
     max: Union[list[str], None] = Field(default_factory=list)
     """Variables to normalize with max."""
+    mean_rstd: Union[list[str], None] = Field(default_factory=list)
+    """Variables to normalize with mean-rstd."""
+    rstd: Union[list[str], None] = Field(default_factory=list)
+    """Variables to normalize with rstd."""
+    mean_gmrstd: Union[list[str], None] = Field(default_factory=list)
+    """Variables to normalize with mean-gmrstd."""
+    gmrstd: Union[list[str], None] = Field(default_factory=list)
+    """Variables to normalize with gmrstd."""
     none: Union[list[str], None] = Field(default_factory=list)
     """Variables not to be normalized."""
 
