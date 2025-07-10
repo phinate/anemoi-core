@@ -675,6 +675,11 @@ class AnemoiMLflowLogger(MLFlowLogger):
 class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
     """A custom MLflow logger that logs terminal output."""
 
+    # By default, Azure sets a different 16 character (or so) run_id as the display name
+    # we may as well set this to the run_id that mlflow/anemoi creates so we don't have two
+    # of these to deal with
+    # However, it has to be done after we've already logged an artifact, otherwise we may get an error
+    _display_name_is_run_id = False
     def __init__(
         self,
         aml_resource_group: str,
@@ -745,6 +750,8 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         self._fork_run_server2server = None
         self._parent_run_server2server = None
         self._parent_dry_run = False
+        self.aml_resource_group = aml_resource_group
+        self.aml_workspace_name = aml_workspace_name
 
         enabled = authentication and not offline
 
@@ -810,11 +817,29 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             run_id=run_id,
         )
 
-        # now set Azure display name to be equal to the run name anemoi sees
-        # this apparently should happen after the logger is initialized
-        aml_run = AzureMLRun.get(ws, run_id=self.run_id)
-        aml_run.display_name = self.run_id
-        aml_run.flush()
+    @rank_zero_only
+    def log_hyperparams(self, params: dict[str, Any] | Namespace, *, expand_keys: list[str] | None = None) -> None:
+        super().log_hyperparams(params=params, expand_keys=expand_keys)
+        if not self._display_name_is_run_id:
+            # now set Azure display name to be equal to the run name anemoi sees
+            # this apparently should happen after the logger is initialized
+            from azureml.core.authentication import ServicePrincipalAuthentication
+            from azureml.core import Workspace, Run as AzureMLRun
+            sp_auth = ServicePrincipalAuthentication(
+                tenant_id=os.environ["AZURE_TENANT_ID"],
+                service_principal_id=os.environ["AZURE_CLIENT_ID"],
+                service_principal_password=os.environ["AZURE_CLIENT_SECRET"],
+            )
+            ws = Workspace(
+                subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
+                resource_group=self.aml_resource_group,
+                workspace_name=self.aml_workspace_name,
+                auth=sp_auth,
+            )
+            aml_run = AzureMLRun.get(ws, run_id=self.run_id)
+            aml_run.display_name = self.run_id
+            aml_run.flush()
+            self._display_name_is_run_id = True
 
 
 def truncate_mlflow_param(key, value, max_bytes=200):
