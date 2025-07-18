@@ -170,6 +170,7 @@ NodeBuilderSchemas = Annotated[
         IcosahedralandHealPixNodeSchema,
         LimitedAreaIcosahedralandHealPixNodeSchema,
         StretchedIcosahdralNodeSchema,
+        XArrayNodeSchema,
     ],
     Field(discriminator="target_"),
 ]
