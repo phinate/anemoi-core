@@ -253,7 +253,8 @@ class LogsMonitor:
         try:
             self.experiment.log_artifact(self.run_id, str(self.file_save_path))
         except:
-            LOGGER.warning(f"could not log_artifact {str(self.file_save_path)}")
+            pass
+            #LOGGER.warning(f"could not log_artifact {str(self.file_save_path)}")
 
 
 class AnemoiMLflowLogger(MLFlowLogger):
