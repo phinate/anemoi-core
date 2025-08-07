@@ -406,7 +406,6 @@ class AnemoiMLflowLogger(MLFlowLogger):
         command = os.environ.get("ANEMOI_TRAINING_CMD", sys.argv[0])
         tags["command"] = command.split("/")[-1]  # get the python script name
         tags["mlflow.source.name"] = command
-
         if len(sys.argv) > 1:
             # add the arguments to the command tag
             tags["command"] = tags["command"] + " " + " ".join(sys.argv[1:])
@@ -562,7 +561,7 @@ class AnemoiMLflowLogger(MLFlowLogger):
             have lists converted according to `expand_iterables`,
             by default None.
         """
-        AnemoiMLflowLogger.log_hyperparams_in_mlflow(
+        self.log_hyperparams_in_mlflow(
             self.experiment,
             self.run_id,
             params,
@@ -662,15 +661,9 @@ class AnemoiMLflowLogger(MLFlowLogger):
                 raise ValueError(msg)
 
             # Truncate parameter values.
-            params_list = []
-            for k, v in expanded_params.items():
-                k_trunc, v_trunc = truncate_mlflow_param(k, v, max_bytes=100)
-                if k_trunc is not None:
-                    params_list.append(Param(key=k_trunc, value=v_trunc))
-
-            #for idx in range(0, len(params_list), 2):
-            #    client.log_batch(run_id=run_id, params=params_list[idx:idx+2])
-
+            params_list = [Param(key=k, value=str(v)[:truncation_length]) for k, v in expanded_params.items()]
+            for idx in range(0, len(params_list), 100):
+                client.log_batch(run_id=run_id, params=params_list[idx : idx + 100])
 
 
     @staticmethod
@@ -683,15 +676,13 @@ class AnemoiMLflowLogger(MLFlowLogger):
         import json
         import tempfile
         from json import JSONEncoder
-        import datetime
 
         class StrEncoder(JSONEncoder):
             def default(self, o: Any) -> str:
                 return str(o)
 
-        now = str(datetime.datetime.now()).replace(' ','T')
         with tempfile.TemporaryDirectory() as tmp_dir:
-            path = Path(tmp_dir) / f"config.{now}.json"
+            path = Path(tmp_dir) / "config.json"
             with Path.open(path, "w") as f:
                 json.dump(params, f, cls=StrEncoder)
             client.log_artifact(run_id=run_id, local_path=path)
@@ -790,8 +781,6 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         if len(missing) > 0:
             raise OSError(f"AnemoiAzureMLflowLogger: Could not find the following required Environment Variables: {missing}")
 
-        # OK now we're good to go
-        #credential = ClientSecretCredential(
         sp_auth = ServicePrincipalAuthentication(
             tenant_id=os.environ["AZURE_TENANT_ID"],
             service_principal_id=os.environ["AZURE_CLIENT_ID"],
@@ -866,21 +855,76 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             aml_run.flush()
             self._display_name_is_run_id = True
 
+    @staticmethod
+    def log_hyperparams_in_mlflow(
+        client: MlflowClient,
+        run_id: str,
+        params: dict[str, Any] | Namespace,
+        *,
+        expand_keys: list[str] | None = None,
+        log_hyperparams: bool | None = True,
+        clean_params: bool = True,
+        max_params_length: int | None = MAX_PARAMS_LENGTH,
+    ) -> None:
+        """Log hyperparameters to MLflow server.
 
-def truncate_mlflow_param(key, value, max_bytes=200):
-    key_bytes = str(key).encode('utf-8')
-    value_str = str(value)
-    available = max_bytes - len(key_bytes)
-    if available <= 0:
-        # Key alone too long, skip this param
-        return None, None
-    # Now truncate the value so that the combined byte length is <= max_bytes
-    value_bytes = value_str.encode('utf-8')
-    if len(value_bytes) <= available:
-        return key, value_str
-    # Truncate value by bytes, not chars
-    # Find the byte slice that fits
-    truncated = value_bytes[:available]
-    # Might split a unicode character, so decode 'ignore'
-    value_trunc_str = truncated.decode('utf-8', errors='ignore')
-    return key, value_trunc_str
+        - flatten config params using '.'.
+        - expand keys within params to avoid truncation.
+        - log hyperparameters as an artifact.
+
+        Parameters
+        ----------
+        client : MlflowClient
+            MLflow client.
+        run_id : str
+            Run ID.
+        params : dict[str, Any] | Namespace
+            params to log.
+        expand_keys : list[str] | None, optional
+            keys to expand within params. Any key being expanded will
+            have lists converted according to `expand_iterables`,
+            by default None.
+        log_hyperparams : bool | None, optional
+            Whether to log hyperparameters, by default True.
+        max_params_length: int | None, optional
+            Maximum number of params to be logged to Mlflow
+        """
+        if log_hyperparams:
+            params = _convert_params(params)
+
+            # this is needed to resolve optional missing config values to a string, instead of raising a missing error
+            if config := params.get("config"):
+                params["config"] = config.model_dump(by_alias=True)
+
+            import mlflow
+            from mlflow.entities import Param
+
+            try:  # Check maximum param value length is available and use it
+                truncation_length = mlflow.utils.validation.MAX_PARAM_VAL_LENGTH
+            except AttributeError:  # Fallback (in case of MAX_PARAM_VAL_LENGTH not available)
+                truncation_length = 250  # Historical default value
+
+            AnemoiAzureMLflowLogger.log_hyperparams_as_mlflow_artifact(client=client, run_id=run_id, params=params)
+
+    @staticmethod
+    def log_hyperparams_as_mlflow_artifact(
+        client: MlflowClient,
+        run_id: str,
+        params: dict[str, Any] | Namespace,
+    ) -> None:
+        """Log hyperparameters as an artifact."""
+        import json
+        import tempfile
+        from json import JSONEncoder
+        import datetime
+
+        class StrEncoder(JSONEncoder):
+            def default(self, o: Any) -> str:
+                return str(o)
+
+        now = str(datetime.datetime.now()).replace(' ','T')
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / f"config.{now}.json"
+            with Path.open(path, "w") as f:
+                json.dump(params, f, cls=StrEncoder)
+            client.log_artifact(run_id=run_id, local_path=path)
