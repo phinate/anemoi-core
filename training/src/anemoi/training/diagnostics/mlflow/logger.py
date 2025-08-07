@@ -716,6 +716,7 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         authentication: bool | None = None,
         log_hyperparams: bool | None = True,
         on_resume_create_child: bool | None = True,
+        max_params_length: int | None = MAX_PARAMS_LENGTH,
     ) -> None:
         """Initialize the AnemoiMLflowLogger.
 
@@ -755,6 +756,8 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             Whether to log hyperparameters, by default True
         on_resume_create_child: bool | None, optional
             Whether to create a child run when resuming a run, by default False
+        max_params_length: int | None, optional
+            Maximum number of params to be logged to Mlflow
         """
         import mlflow
         from azureml.core import Workspace
@@ -763,6 +766,7 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         self._resumed = resumed
         self._forked = forked
         self._flag_log_hparams = log_hyperparams
+        self._max_params_length = max_params_length
 
         self._fork_run_server2server = None
         self._parent_run_server2server = None
