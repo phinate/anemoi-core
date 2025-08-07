@@ -285,7 +285,7 @@ class MlflowSchema(BaseModel):
     "Maximum number of hpParams to be logged with mlflow"
     use_azure: bool = False
     "If true, log to azure ml workspace server"
-    aml_resource_group: str  | None = None
+    aml_resource_group: str | None = None
     "If using AML to log with mlflow, name of the resource group"
     aml_workspace_name: str | None = None
     "If using AML to log with mlflow, name of the workspace"

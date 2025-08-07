@@ -842,8 +842,6 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             run_id=run_id,
         )
 
-
-
     @rank_zero_only
     def log_hyperparams(self, params: dict[str, Any] | Namespace, *, expand_keys: list[str] | None = None) -> None:
         super().log_hyperparams(params=params, expand_keys=expand_keys)
