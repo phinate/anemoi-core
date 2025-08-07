@@ -240,18 +240,13 @@ class LogsMonitor:
 
             logfile.flush()
 
-        # NOTE TO SELF:
-        # this is hopefully the last one
-        # we can't just throw in a "now" to the txt file, because this relies on opening and rewriting it.
-        # So, skip it for now
-        #import datetime
-        #now = str(datetime.datetime.now()).replace(' ','T')
-        #path = str(self.file_save_path).replace(".txt", f"{now}.txt")
+        # This try/except is for AML logging
+        # typically terminal_output.txt gets updated by overwriting, but this is not allowed on AML
+        # since this happens tons of times, just silently pass if it fails
         try:
             self.experiment.log_artifact(self.run_id, str(self.file_save_path))
         except:
             pass
-            #LOGGER.warning(f"could not log_artifact {str(self.file_save_path)}")
 
 
 class AnemoiMLflowLogger(MLFlowLogger):
