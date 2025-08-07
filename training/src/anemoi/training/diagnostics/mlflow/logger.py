@@ -826,6 +826,10 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             # saving dir and save all artifacts/metrics to the remote server database
             save_dir = None
 
+        # Track logged metrics to prevent duplicate logs
+        # 2000 has been chosen as this should contain metrics form many steps
+        self._logged_metrics = FixedLengthSet(maxlen=2000)  # Track (key, step)
+
         MLFlowLogger.__init__(
             self,
             experiment_name=experiment_name,
@@ -837,6 +841,8 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             prefix=prefix,
             run_id=run_id,
         )
+
+
 
     @rank_zero_only
     def log_hyperparams(self, params: dict[str, Any] | Namespace, *, expand_keys: list[str] | None = None) -> None:
