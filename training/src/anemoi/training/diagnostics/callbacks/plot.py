@@ -119,7 +119,7 @@ class BasePlotCallback(Callback, ABC):
                     logger.experiment.log_artifact(run_id, str(save_path))
                 except Exception as e:
                     if "Resource Conflict" in str(e):
-                        LOGGER.warning(f"Artifact: {str(save_path)} already exists, will not log again.")
+                        LOGGER.warning(f"Artifact: {save_path!s} already exists, will not log again.")
                     else:
                         LOGGER.error(str(e))
 
@@ -154,7 +154,7 @@ class BasePlotCallback(Callback, ABC):
                     logger.experiment.log_artifact(run_id, str(save_path))
                 except Exception as e:
                     if "Resource Conflict" in str(e):
-                        LOGGER.warning(f"Artifact: {str(save_path)} already exists, will not log again.")
+                        LOGGER.warning(f"Artifact: {save_path!s} already exists, will not log again.")
                     else:
                         LOGGER.error(str(e))
 

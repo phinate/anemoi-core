@@ -33,7 +33,8 @@ from typing_extensions import override
 from anemoi.training.diagnostics.mlflow.utils import FixedLengthSet
 from anemoi.training.diagnostics.mlflow.utils import clean_config_params
 from anemoi.training.diagnostics.mlflow.utils import expand_iterables
-from anemoi.utils.mlflow.auth import TokenAuth, PassiveAuth
+from anemoi.utils.mlflow.auth import PassiveAuth
+from anemoi.utils.mlflow.auth import TokenAuth
 from anemoi.utils.mlflow.utils import health_check
 
 LOGGER = logging.getLogger(__name__)
@@ -665,7 +666,6 @@ class AnemoiMLflowLogger(MLFlowLogger):
             for idx in range(0, len(params_list), 100):
                 client.log_batch(run_id=run_id, params=params_list[idx : idx + 100])
 
-
     @staticmethod
     def log_hyperparams_as_mlflow_artifact(
         client: MlflowClient,
@@ -696,6 +696,7 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
     # of these to deal with
     # However, it has to be done after we've already logged an artifact, otherwise we may get an error
     _display_name_is_run_id = False
+
     def __init__(
         self,
         aml_resource_group: str,
@@ -756,8 +757,8 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             Whether to create a child run when resuming a run, by default False
         """
         import mlflow
+        from azureml.core import Workspace
         from azureml.core.authentication import ServicePrincipalAuthentication
-        from azureml.core import Workspace, Run as AzureMLRun
 
         self._resumed = resumed
         self._forked = forked
@@ -779,7 +780,9 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         azure_env_vars = ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID"]
         missing = [v for v in azure_env_vars if v not in os.environ]
         if len(missing) > 0:
-            raise OSError(f"AnemoiAzureMLflowLogger: Could not find the following required Environment Variables: {missing}")
+            raise OSError(
+                f"AnemoiAzureMLflowLogger: Could not find the following required Environment Variables: {missing}",
+            )
 
         sp_auth = ServicePrincipalAuthentication(
             tenant_id=os.environ["AZURE_TENANT_ID"],
@@ -837,8 +840,10 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         if not self._display_name_is_run_id:
             # now set Azure display name to be equal to the run name anemoi sees
             # this apparently should happen after the logger is initialized
+            from azureml.core import Run as AzureMLRun
+            from azureml.core import Workspace
             from azureml.core.authentication import ServicePrincipalAuthentication
-            from azureml.core import Workspace, Run as AzureMLRun
+
             sp_auth = ServicePrincipalAuthentication(
                 tenant_id=os.environ["AZURE_TENANT_ID"],
                 service_principal_id=os.environ["AZURE_CLIENT_ID"],
@@ -897,7 +902,6 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
                 params["config"] = config.model_dump(by_alias=True)
 
             import mlflow
-            from mlflow.entities import Param
 
             try:  # Check maximum param value length is available and use it
                 truncation_length = mlflow.utils.validation.MAX_PARAM_VAL_LENGTH
@@ -913,16 +917,16 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         params: dict[str, Any] | Namespace,
     ) -> None:
         """Log hyperparameters as an artifact."""
+        import datetime
         import json
         import tempfile
         from json import JSONEncoder
-        import datetime
 
         class StrEncoder(JSONEncoder):
             def default(self, o: Any) -> str:
                 return str(o)
 
-        now = str(datetime.datetime.now()).replace(' ','T')
+        now = str(datetime.datetime.now()).replace(" ", "T")
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / f"config.{now}.json"
             with Path.open(path, "w") as f:

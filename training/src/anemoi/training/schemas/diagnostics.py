@@ -296,6 +296,7 @@ class MlflowSchema(BaseModel):
             values["tracking_uri"] = None
         return values
 
+
 class TensorboardSchema(BaseModel):
     enabled: bool
     "Use TensorBoard logger."
