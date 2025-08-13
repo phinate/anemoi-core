@@ -797,7 +797,7 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             LOGGER.info("Subscription: %s", sub)
             LOGGER.info("Resource group: %s", rg)
             LOGGER.info("Workspace: %s", wsname)
-            ws = MLClient(
+            ml_client = MLClient(
                 DefaultAzureCredential(),
                 subscription_id=sub,
                 resource_group_name=rg,
@@ -808,8 +808,8 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
             msg = f"Azure environment incorrectly configured; tried to use \n  - subscription: {sub}\n  - resource_group: {rg}\n  - workspace: {wsname}.\nTry explicitly setting your subscription details via `diagnostics.mlflow.aml_subscription_id`, `diagnostics.mlflow.aml_resource_group`, `diagnostics.mlflow.aml_workspace_name`."
 
             raise ValueError(msg)
-        tracking_uri = ws.get_mlflow_tracking_uri()
-        mlflow.set_tracking_uri(tracking_uri)
+        mlflow_tracking_uri = ml_client.workspaces.get(ml_client.workspace_name).mlflow_tracking_uri
+        mlflow.set_tracking_uri(mlflow_tracking_uri)
 
         # Back to our regularly scheduled programming
         if rank_zero_only.rank == 0:
