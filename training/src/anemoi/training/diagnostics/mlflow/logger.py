@@ -793,12 +793,17 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         wsname = aml_workspace_name or os.getenv("AZUREML_ARM_WORKSPACE_NAME")
 
         if sub and rg and wsname:
+            LOGGER.info("Attempting Azure authentication with the following details:")
+            LOGGER.info("Subscription: %s", sub)
+            LOGGER.info("Resource group: %s", rg)
+            LOGGER.info("Workspace: %s", wsname)
             ws = MLClient(
                 DefaultAzureCredential(),
                 subscription_id=sub,
                 resource_group_name=rg,
                 workspace_name=wsname,
             )
+            LOGGER.info("Successfully authenticated with Azure.")
         else:
             msg = f"Azure environment incorrectly configured; tried to use \n  - subscription: {sub}\n  - resource_group: {rg}\n  - workspace: {wsname}.\nTry explicitly setting your subscription details via `diagnostics.mlflow.aml_subscription_id`, `diagnostics.mlflow.aml_resource_group`, `diagnostics.mlflow.aml_workspace_name`."
 
