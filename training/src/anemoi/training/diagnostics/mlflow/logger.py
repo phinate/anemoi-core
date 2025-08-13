@@ -699,8 +699,9 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
 
     def __init__(
         self,
-        aml_resource_group: str,
-        aml_workspace_name: str,
+        aml_subscription_id: str | None = None,
+        aml_resource_group: str | None = None,
+        aml_workspace_name: str | None = None,
         experiment_name: str = "lightning_logs",
         project_name: str = "anemoi",
         run_name: str | None = None,
@@ -722,9 +723,11 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
 
         Parameters
         ----------
-        aml_resource_group: str
+        aml_subscription_id: str | None, optional
+            The Azure subscription id
+        aml_resource_group: str | None, optional
             Name of the Azure ML resource group
-        aml_workspace: str
+        aml_workspace: str | None, optional
             Name of the Azure ML workspace
         experiment_name : str, optional
             Name of experiment, by default "lightning_logs"
@@ -759,9 +762,14 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         max_params_length: int | None, optional
             Maximum number of params to be logged to Mlflow
         """
+        try:
+            from azure.ai.ml import MLClient
+            from azure.identity import DefaultAzureCredential
+        except ModuleNotFoundError as e:
+            msg = "Use of MLFlow logging in Azure requires the modules `azure-ai-ml` and `azure-identity`. You can install these via the Azure optional extra in Anemoi training: `pip install anemoi-training[azure]`."
+            raise ModuleNotFoundError(msg) from e
+
         import mlflow
-        from azureml.core import Workspace
-        from azureml.core.authentication import ServicePrincipalAuthentication
 
         self._resumed = resumed
         self._forked = forked
@@ -771,8 +779,6 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         self._fork_run_server2server = None
         self._parent_run_server2server = None
         self._parent_dry_run = False
-        self.aml_resource_group = aml_resource_group
-        self.aml_workspace_name = aml_workspace_name
 
         enabled = authentication and not offline
 
@@ -780,26 +786,23 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         # we don't need authenticate, this just lets us easily subclass the logger
         self.auth = PassiveAuth()
 
-        # Check if the user has set the following required environment variables
-        azure_env_vars = ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID"]
-        missing = [v for v in azure_env_vars if v not in os.environ]
-        if len(missing) > 0:
-            raise OSError(
-                f"AnemoiAzureMLflowLogger: Could not find the following required Environment Variables: {missing}",
+        # These env variables are usually attatched to Azure ML jobs,
+        # so use them if they exist.
+        sub = aml_subscription_id or os.getenv("AZUREML_ARM_SUBSCRIPTION")
+        rg = aml_resource_group or os.getenv("AZUREML_ARM_RESOURCEGROUP")
+        wsname = aml_workspace_name or os.getenv("AZUREML_ARM_WORKSPACE_NAME")
+
+        if sub and rg and wsname:
+            ws = MLClient(
+                DefaultAzureCredential(),
+                subscription_id=sub,
+                resource_group_name=rg,
+                workspace_name=wsname,
             )
+        else:
+            msg = f"Azure environment incorrectly configured; tried to use \n  - subscription: {sub}\n  - resource_group: {rg}\n  - workspace: {wsname}.\nTry explicitly setting your subscription details via `diagnostics.mlflow.aml_subscription_id`, `diagnostics.mlflow.aml_resource_group`, `diagnostics.mlflow.aml_workspace_name`."
 
-        sp_auth = ServicePrincipalAuthentication(
-            tenant_id=os.environ["AZURE_TENANT_ID"],
-            service_principal_id=os.environ["AZURE_CLIENT_ID"],
-            service_principal_password=os.environ["AZURE_CLIENT_SECRET"],
-        )
-        ws = Workspace(
-            subscription_id=os.environ["AZURE_SUBSCRIPTION_ID"],
-            resource_group=aml_resource_group,
-            workspace_name=aml_workspace_name,
-            auth=sp_auth,
-        )
-
+            raise ValueError(msg)
         tracking_uri = ws.get_mlflow_tracking_uri()
         mlflow.set_tracking_uri(tracking_uri)
 

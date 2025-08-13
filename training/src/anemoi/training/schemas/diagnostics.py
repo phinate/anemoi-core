@@ -286,9 +286,11 @@ class MlflowSchema(BaseModel):
     use_azure: bool = False
     "If true, log to azure ml workspace server"
     aml_resource_group: str | None = None
-    "If using AML to log with mlflow, name of the resource group"
+    "If using AML to log with MLFlow, name of the resource group"
     aml_workspace_name: str | None = None
-    "If using AML to log with mlflow, name of the workspace"
+    "If using AML to log with MLFlow, name of the workspace"
+    aml_subscription_id: str | None = None
+    "If using AML to log with MLFlow, subscription ID" 
 
     @root_validator(pre=True)
     def clean_entity(cls: type["MlflowSchema"], values: dict[str, Any]) -> dict[str, Any]:  # noqa: N805
