@@ -22,7 +22,7 @@ from anemoi.training.schemas.base_schema import convert_to_omegaconf
 LOGGER = logging.getLogger(__name__)
 
 
-def get_mlflow_logger(config: BaseSchema) -> None:
+def get_mlflow_logger(config: BaseSchema):
     if not config.diagnostics.log.mlflow.enabled:
         LOGGER.debug("MLFlow logging is disabled.")
         return None
@@ -36,9 +36,9 @@ def get_mlflow_logger(config: BaseSchema) -> None:
     os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR"] = "2"
     os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_JITTER"] = "1"
 
+    from anemoi.training.diagnostics.mlflow.azureml import AnemoiAzureMLflowLogger
     from anemoi.training.diagnostics.mlflow.logger import LOG_MODEL
     from anemoi.training.diagnostics.mlflow.logger import MAX_PARAMS_LENGTH
-    from anemoi.training.diagnostics.mlflow.logger import AnemoiAzureMLflowLogger
     from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
 
     resumed = config.training.run_id is not None
@@ -73,16 +73,18 @@ def get_mlflow_logger(config: BaseSchema) -> None:
 
     kw = {}
     if not config.diagnostics.log.mlflow.use_azure:
-        Logger = AnemoiMLflowLogger
+        logger_class = AnemoiMLflowLogger
     else:
-        Logger = AnemoiAzureMLflowLogger
+        logger_class = AnemoiAzureMLflowLogger
         kw["aml_resource_group"] = config.diagnostics.log.mlflow.aml_resource_group
         kw["aml_workspace_name"] = config.diagnostics.log.mlflow.aml_workspace_name
+        kw["aml_subscription_id"] = config.diagnostics.log.mlflow.aml_subscription_id
+        kw["aml_identity"] = config.diagnostics.log.mlflow.aml_identity
 
     max_params_length = getattr(config.diagnostics.log.mlflow, "max_params_length", MAX_PARAMS_LENGTH)
     LOGGER.info("Maximum number of params allowed to be logged is: %s", max_params_length)
     log_model = getattr(config.diagnostics.log.mlflow, "log_model", LOG_MODEL)
-    logger = Logger(
+    logger = logger_class(
         experiment_name=config.diagnostics.log.mlflow.experiment_name,
         project_name=config.diagnostics.log.mlflow.project_name,
         tracking_uri=tracking_uri,
