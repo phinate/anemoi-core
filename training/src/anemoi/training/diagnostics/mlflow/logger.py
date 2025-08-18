@@ -33,7 +33,7 @@ from typing_extensions import override
 from anemoi.training.diagnostics.mlflow.utils import FixedLengthSet
 from anemoi.training.diagnostics.mlflow.utils import clean_config_params
 from anemoi.training.diagnostics.mlflow.utils import expand_iterables
-from anemoi.utils.mlflow.auth import PassiveAuth
+from anemoi.utils.mlflow.auth import NoAuth
 from anemoi.utils.mlflow.auth import TokenAuth
 from anemoi.utils.mlflow.utils import health_check
 
@@ -778,7 +778,7 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
 
         # Azure specific stuff
         # we don't need authenticate, this just lets us easily subclass the logger
-        self.auth = PassiveAuth()
+        self.auth = NoAuth()
 
         # Check if the user has set the following required environment variables
         azure_env_vars = ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_SUBSCRIPTION_ID"]
