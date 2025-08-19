@@ -37,7 +37,7 @@ from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
 from anemoi.training.diagnostics.mlflow.utils import FixedLengthSet
-from anemoi.utils.mlflow.auth import PassiveAuth
+from anemoi.utils.mlflow.auth import NoAuth
 
 LOGGER = logging.getLogger(__name__)
 MAX_PARAMS_LENGTH = 2000
@@ -197,7 +197,7 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
 
         # <-- Azure specific stuff -->
         # we don't need authenticate, this just lets us easily subclass the logger
-        self.auth = PassiveAuth()
+        self.auth = NoAuth()
         # Azure ML jobs (should) set this for us:
         trk_uri = os.getenv("MLFLOW_TRACKING_URI")
         # fall back to subscription-based method if not
