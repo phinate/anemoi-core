@@ -198,21 +198,19 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         # <-- Azure specific stuff -->
         # we don't need authenticate, this just lets us easily subclass the logger
         self.auth = NoAuth()
-        # Azure ML jobs (should) set this for us:
-        trk_uri = os.getenv("MLFLOW_TRACKING_URI")
         # fall back to subscription-based method if not
-        if not trk_uri:
+        if not tracking_uri:
             LOGGER.warning(
                 "Could not retrieve Azure MLFlow uri automatically;trying to retrieve from subscription...",
             )
-            trk_uri = get_azure_workspace(
+            tracking_uri = get_azure_workspace(
                 aml_identity or "default",
                 aml_subscription_id,
                 aml_resource_group,
                 aml_workspace_name,
             ).mlflow_tracking_uri
 
-        mlflow.set_tracking_uri(trk_uri)
+        mlflow.set_tracking_uri(tracking_uri)
 
         if offline:
             msg = (
