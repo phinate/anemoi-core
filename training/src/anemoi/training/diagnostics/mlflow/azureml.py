@@ -9,6 +9,7 @@ from typing import Literal
 
 if TYPE_CHECKING:
     from argparse import Namespace
+
     from mlflow.tracking import MlflowClient
 
 try:

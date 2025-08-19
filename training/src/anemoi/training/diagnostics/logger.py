@@ -38,8 +38,8 @@ def get_mlflow_logger(config: BaseSchema) -> None:
 
     from anemoi.training.diagnostics.mlflow import LOG_MODEL
     from anemoi.training.diagnostics.mlflow import MAX_PARAMS_LENGTH
-    from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
     from anemoi.training.diagnostics.mlflow.azureml import AnemoiAzureMLflowLogger
+    from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
 
     resumed = config.training.run_id is not None
     forked = config.training.fork_run_id is not None
