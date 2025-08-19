@@ -253,6 +253,7 @@ class WandbSchema(BaseModel):
 
 
 class MlflowSchema(BaseModel):
+
     enabled: bool
     "Use MLflow logger."
     offline: bool
