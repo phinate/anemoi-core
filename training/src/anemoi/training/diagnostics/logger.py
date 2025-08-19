@@ -22,7 +22,7 @@ from anemoi.training.schemas.base_schema import convert_to_omegaconf
 LOGGER = logging.getLogger(__name__)
 
 
-def get_mlflow_logger(config: BaseSchema):
+def get_mlflow_logger(config: BaseSchema) -> None:
     if not config.diagnostics.log.mlflow.enabled:
         LOGGER.debug("MLFlow logging is disabled.")
         return None
