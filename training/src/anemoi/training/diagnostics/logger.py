@@ -36,9 +36,9 @@ def get_mlflow_logger(config: BaseSchema):
     os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR"] = "2"
     os.environ["MLFLOW_HTTP_REQUEST_BACKOFF_JITTER"] = "1"
 
-    from anemoi.training.diagnostics.mlflow.azureml import AnemoiAzureMLflowLogger
     from anemoi.training.diagnostics.mlflow.logger import LOG_MODEL
     from anemoi.training.diagnostics.mlflow.logger import MAX_PARAMS_LENGTH
+    from anemoi.training.diagnostics.mlflow.azureml import AnemoiAzureMLflowLogger
     from anemoi.training.diagnostics.mlflow.logger import AnemoiMLflowLogger
 
     resumed = config.training.run_id is not None
