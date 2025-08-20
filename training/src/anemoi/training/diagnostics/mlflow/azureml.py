@@ -126,7 +126,7 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         experiment_name: str = "lightning_logs",
         project_name: str = "anemoi",
         run_name: str | None = None,
-        tracking_uri: str | None = os.getenv("MLFLOW_TRACKING_URI"),
+        tracking_uri: str | None = None,
         save_dir: str | None = "./mlruns",
         log_model: Literal["all"] | bool = False,
         prefix: str = "",
@@ -199,6 +199,10 @@ class AnemoiAzureMLflowLogger(AnemoiMLflowLogger):
         # <-- Azure specific stuff -->
         # we don't need authenticate, this just lets us easily subclass the logger
         self.auth = NoAuth()
+
+        # Azure ML jobs (should) set this for us:
+        tracking_uri = tracking_uri or os.getenv("MLFLOW_TRACKING_URI")
+
         # fall back to subscription-based method if not
         if not tracking_uri:
             LOGGER.warning(
